@@ -1,0 +1,163 @@
+<script>
+  /* =====================================================================
+     AUTH: login page, session token, server calls that carry the token
+     ===================================================================== */
+  let session = null; // { token, user }
+
+  function setLoginBusy(busy) {
+  $('lgBtn').disabled = busy;
+  $('lgSpin').classList.toggle('d-none', !busy);
+  $('lgBtnText').textContent = busy ? 'Signing in...' : 'Sign in';
+}
+
+function showLoginMsg(msg, ok) {
+  const e = $('lgError');
+  e.textContent = msg || '';
+  e.className = 'auth-message ' + (ok ? 'ok' : 'err') + (msg ? '' : ' d-none');
+}
+const store = {
+  get: k => {
+    try { const v = localStorage.getItem('vr_' + k); if (v) return v; } catch (e) {}
+    try { return sessionStorage.getItem('vr_' + k); } catch (e) { return null; }
+  },
+  set: (k, v) => {
+    try { localStorage.setItem('vr_' + k, v); } catch (e) {}
+    try { sessionStorage.setItem('vr_' + k, v); } catch (e) {}
+  },
+  del: k => {
+    try { localStorage.removeItem('vr_' + k); } catch (e) {}
+    try { sessionStorage.removeItem('vr_' + k); } catch (e) {}
+  }
+};
+
+  const isViewer = () => !!session && session.user.role === 'viewer';
+  const isAdmin = () => !!session && session.user.role === 'admin';
+
+  // Calls a server function; the session token is always the first argument
+  function call(fn, ...args) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(err => {
+          if (/Session expired/i.test((err && err.message) || '')) {
+            Swal.close();
+            endSession('Your session expired. Please sign in again.');
+          }
+          reject(err);
+        })[fn](session ? session.token : '', ...args);
+    });
+  }
+
+function endSession(msg, ok) {
+  session = null;
+  store.del('token');
+  document.body.removeAttribute('data-role');
+  $('app').classList.add('d-none');
+  $('loginScreen').classList.remove('d-none');
+  $('lgPass').value = '';
+  $('lgPass').type = 'password';
+$('eyeIco').className = 'bi bi-eye';
+  showLoginMsg(msg, ok);
+  $('lgUser').focus();
+}
+
+function confirmLogout() {
+  Swal.fire({
+    title: 'Sign out?',
+    text: 'You will need to sign in again to continue.',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'Sign out',
+    cancelButtonText: 'Stay signed in',
+    confirmButtonColor: '#b3261e'
+  }).then(x => { if (x.isConfirmed) doLogout(); });
+}
+
+  function startApp(res) {
+    session = res;
+    store.set('token', res.token);
+    document.body.setAttribute('data-role', res.user.role);
+    $('loginScreen').classList.add('d-none');
+    $('app').classList.remove('d-none');
+const nm = res.user.name || res.user.username;
+setText('whoName', nm);
+setText('whoAvatar', nm.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase());
+$('adminNav').classList.toggle('d-none', !isAdmin());
+    bootApp();
+    if (res.user.mustChange) changePasswordDialog(true);
+  }
+
+function doLogin() {
+  const u = $('lgUser').value.trim(), p = $('lgPass').value;
+  if (!u || !p) { showLoginMsg('Enter your username and password.'); return; }
+  setLoginBusy(true);
+  showLoginMsg('');
+  google.script.run
+    .withSuccessHandler(res => { setLoginBusy(false); startApp(res); })
+    .withFailureHandler(err => {
+      setLoginBusy(false);
+      showLoginMsg(String(err.message || err).replace(/^Error:\s*/, ''));
+      const c = $('loginCard');
+      c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake');
+      $('lgPass').select();
+    })
+    .login(u, p);
+}
+
+function doLogout() {
+  const t = session && session.token;
+  if (t) google.script.run.logout(t);
+  endSession('You have been signed out.', true);
+}
+
+  // Page load: reuse a saved token if it is still valid
+function restoreSession() {
+  const t = store.get('token');
+  if (!t) { $('bootScreen').classList.add('d-none'); $('loginScreen').classList.remove('d-none'); return; }
+  google.script.run
+    .withSuccessHandler(user => { $('bootScreen').classList.add('d-none'); startApp({ token: t, user: user }); })
+    .withFailureHandler(err => {
+      // Only forget the token if the session is really gone
+      if (/expired|sign in/i.test((err && err.message) || '')) store.del('token');
+      $('bootScreen').classList.add('d-none');
+      $('loginScreen').classList.remove('d-none');
+    })
+    .whoAmI(t);
+}
+
+
+
+  /* ---------- Change password ---------- */
+  function changePasswordDialog(forced) {
+    Swal.fire({
+      title: forced ? 'Set a new password' : 'Change password',
+      text: forced ? 'You are using a temporary password.' : '',
+      html:
+        '<input id="pwOld" type="password" class="swal2-input" placeholder="Current password" autocomplete="current-password">' +
+        '<input id="pwNew" type="password" class="swal2-input" placeholder="New password (4+ characters)" autocomplete="new-password">' +
+        '<input id="pwNew2" type="password" class="swal2-input" placeholder="Repeat new password" autocomplete="new-password">',
+      showCancelButton: !forced,
+      allowOutsideClick: !forced,
+      allowEscapeKey: !forced,
+      confirmButtonText: 'Save',
+      preConfirm: () => {
+        const o = $('pwOld').value, n = $('pwNew').value, n2 = $('pwNew2').value;
+        if (n.length < 4) { Swal.showValidationMessage('At least 4 characters.'); return false; }
+        if (n !== n2) { Swal.showValidationMessage('The new passwords do not match.'); return false; }
+        return call('changePassword', o, n)
+          .then(u => { session.user = u; return true; })
+          .catch(e => { Swal.showValidationMessage(String(e.message || e).replace(/^Error:\s*/, '')); return false; });
+      }
+    }).then(x => { if (x.isConfirmed) Swal.fire('Password changed', '', 'success'); });
+  }
+
+function togglePw() {
+  const p = $('lgPass'), show = p.type === 'password';
+  p.type = show ? 'text' : 'password';
+  $('eyeIco').className = show ? 'bi bi-eye-slash' : 'bi bi-eye';
+}
+
+$('lgPass').addEventListener('keyup', e => {
+  $('capsHint').classList.toggle('d-none', !(e.getModifierState && e.getModifierState('CapsLock')));
+});
+</script>

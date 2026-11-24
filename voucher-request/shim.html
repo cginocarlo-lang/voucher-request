@@ -1,0 +1,16 @@
+<script>
+/* Replaces google.script.run so the existing frontend code works unchanged */
+window.google = { script: { run: (function make(ok, bad) {
+  return new Proxy({}, { get: (_, k) => {
+    if (k === 'withSuccessHandler') return f => make(f, bad);
+    if (k === 'withFailureHandler') return f => make(ok, f);
+    return (...args) => fetch('/api/rpc', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fn: k, args })
+    }).then(r => r.json()).then(j => ({ j }), e => ({ e })).then(({ j, e }) => {
+      const err = e || (j.error && new Error(j.error));
+      if (err) { if (bad) bad(err); } else if (ok) ok(j.result);
+    });
+  } });
+})(null, null) } };
+</script>

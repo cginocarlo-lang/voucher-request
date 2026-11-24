@@ -1,0 +1,133 @@
+<div class="container py-4" id="viewObr">
+  <div class="app-bar d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h1 class="h4 mb-0">Obligation Requests</h1>
+    </div>
+    <button class="btn btn-primary write-only" onclick="openForm()">Add ObR</button>
+  </div>
+
+  <div class="card">
+    <div class="toolbar d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <div class="search-wrap flex-grow-1">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>
+        <input id="search" type="text" class="form-control" placeholder="Search" autocomplete="off" oninput="onSearch()">
+        <button type="button" class="clear" id="searchClear" title="Clear" onclick="clearSearch()">&times;</button>
+      </div>
+      <div class="text-muted small" id="count"></div>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr><th>ObR No.</th><th>Date</th><th>Payee</th><th>Particulars</th><th class="text-end">Amount</th><th class="text-end">Actions</th></tr>
+        </thead>
+        <tbody id="list"><tr><td colspan="6" class="text-center text-muted py-4">Loading...</td></tr></tbody>
+      </table>
+    </div>
+    <div class="pager d-none flex-wrap justify-content-between align-items-center gap-2" id="pager">
+      <div class="d-flex align-items-center gap-2 small text-muted">
+        <span>Rows per page</span>
+        <select id="pageSize" class="form-select form-select-sm" style="width:auto" onchange="changePageSize()">
+          <option value="10">10</option>
+          <option value="25">25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+        <span id="rangeInfo"></span>
+      </div>
+      <ul class="pagination pagination-sm mb-0" id="pageNav"></ul>
+    </div>
+  </div>
+</div>
+
+<!-- ObR modal -->
+<div class="modal fade" id="obrModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title h5" id="modalTitle">New obligation request</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-6"><label class="form-label" for="payee">Payee</label><input id="payee" class="form-control"></div>
+          <div class="col-md-6"><label class="form-label" for="office">Office</label><input id="office" class="form-control"></div>
+          <div class="col-md-8"><label class="form-label" for="address">Address</label><input id="address" class="form-control"></div>
+          <div class="col-md-4"><label class="form-label" for="obrNo">ObR No.</label><input id="obrNo" class="form-control" autocomplete="off"></div>
+
+          <!-- Line items -->
+          <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <label class="form-label mb-0">Items</label>
+              <button type="button" class="btn btn-sm btn-outline-primary" onclick="addItem()">Add line</button>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th style="width:16%">Responsibility center</th>
+                    <th>Particulars</th>
+                    <th style="width:11%">F.P.P</th>
+                    <th style="width:15%">Account code</th>
+                    <th style="width:15%" class="text-end">Amount</th>
+                    <th style="width:44px"></th>
+                  </tr>
+                </thead>
+                <tbody id="items"></tbody>
+                <tfoot>
+                  <tr>
+                    <td colspan="4" class="text-end fw-bold">Total</td>
+                    <td class="text-end fw-bold" id="itemsTotal">0.00</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          <div class="col-12"><hr class="my-1"></div>
+
+
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-outline-primary" onclick="saveForm(false)">Save</button>
+        <button class="btn btn-primary" onclick="saveForm(true)">Save and print</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Disbursement Voucher modal -->
+<div class="modal fade" id="dvModal" tabindex="-1" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title h5" id="dvTitle">Disbursement voucher</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="dv-info mb-3" id="dvInfo"></div>
+        <div class="row g-3">
+          <div class="col-md-6"><label class="form-label" for="dvNo">DV No.</label><input id="dvNo" class="form-control" autocomplete="off"></div>
+          <div class="col-md-6"><label class="form-label" for="dvDate">Date</label><input id="dvDate" type="date" class="form-control"></div>
+          <div class="col-12"><label class="form-label" for="idNo">ID No./TIN</label><input id="idNo" class="form-control" autocomplete="off"></div>
+
+
+
+          <div class="col-12">
+            <label class="form-label d-block">Classification of disbursement</label>
+            <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="dvClass" id="cls0" value="Cash Advance"><label class="form-check-label" for="cls0">Cash Advance</label></div>
+            <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="dvClass" id="cls1" value="Reimbursement"><label class="form-check-label" for="cls1">Reimbursement</label></div>
+            <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="dvClass" id="cls2" value="Other Payments"><label class="form-check-label" for="cls2">Other Payments</label></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-outline-primary" onclick="saveDv(false)">Save</button>
+        <button class="btn btn-primary" onclick="saveDv(true)">Save and print</button>
+      </div>
+    </div>
+  </div>
+</div>

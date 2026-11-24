@@ -1,0 +1,7 @@
+{
+  "name": "voucher-request",
+  "private": true,
+  "type": "module",
+  "scripts": { "build": "node build.js" },
+  "dependencies": { "@supabase/supabase-js": "^2.45.0" }
+}

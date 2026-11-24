@@ -1,0 +1,462 @@
+<script>
+  /* =====================================================================
+     OBR MODULE: list, search, pagination, ObR form, Disbursement Voucher, printing
+     ===================================================================== */
+  const getObrModal = () => modalOf('obrModal');
+  const getDvModal = () => modalOf('dvModal');
+
+  let records = [];
+  let NAME_DEFAULTS = {}; // signatories of the user's office (Offices tab)
+
+  function loadDefaults() {
+    call('getDefaults').then(d => { NAME_DEFAULTS = d || {}; }).catch(err => console.error('getDefaults failed:', err));
+  }
+
+  /* ---------- List ---------- */
+  function loadList() {
+    call('getObrs')
+      .then(rows => { records = rows || []; renderList(); })
+      .catch(showError('Could not load records'));
+  }
+
+  function searchText(r) {
+    const parts = [r.obrNo, r.dvNo, r.idNo, r.date, r.payee, r.office, r.address, r.owner, money(r.amount), String(r.amount)];
+    (r.items || []).forEach(it => parts.push(it.rc, it.particulars, it.fpp, it.acct, money(it.amount), String(it.amount)));
+    return parts.join(' ').toLowerCase();
+  }
+
+  let page = 1;
+  let pageSize = 10;
+
+  const onSearch = debounce(() => { page = 1; renderList(); }, 200);
+
+  function clearSearch() {
+    $('search').value = '';
+    page = 1;
+    renderList();
+    $('search').focus();
+  }
+
+  function changePageSize() {
+    pageSize = Number($('pageSize').value);
+    page = 1;
+    renderList();
+  }
+
+  function goToPage(p) {
+    page = p;
+    renderList();
+    $('app').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function pageList(current, total) {
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    const set = new Set([1, total, current - 1, current, current + 1]);
+    const nums = Array.from(set).filter(n => n >= 1 && n <= total).sort((a, b) => a - b);
+    const out = [];
+    nums.forEach((n, i) => {
+      if (i && n - nums[i - 1] > 1) out.push('...');
+      out.push(n);
+    });
+    return out;
+  }
+
+  function renderPager(total, pages, start, shownCount) {
+    $('pager').classList.toggle('d-none', !total);
+    $('pager').classList.toggle('d-flex', !!total);
+    if (!total) return;
+    $('rangeInfo').textContent = (start + 1) + '\u2013' + (start + shownCount) + ' of ' + total;
+
+    const nav = $('pageNav');
+    nav.innerHTML = '';
+    const add = (label, target, opts) => {
+      opts = opts || {};
+      const li = document.createElement('li');
+      li.className = 'page-item' + (opts.active ? ' active' : '') + (opts.disabled ? ' disabled' : '');
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'page-link';
+      b.textContent = label;
+      if (!opts.disabled && !opts.active) b.onclick = () => goToPage(target);
+      li.appendChild(b);
+      nav.appendChild(li);
+    };
+    add('Previous', page - 1, { disabled: page === 1 });
+    pageList(page, pages).forEach(p => {
+      if (p === '...') add('\u2026', 0, { disabled: true });
+      else add(String(p), p, { active: p === page });
+    });
+    add('Next', page + 1, { disabled: page === pages });
+  }
+
+  function renderList() {
+    const tb = $('list');
+    tb.innerHTML = '';
+    const q = $('search').value.trim().toLowerCase();
+    $('searchClear').style.display = q ? 'block' : 'none';
+
+    const words = q ? q.split(/\s+/) : [];
+    const shown = words.length
+      ? records.filter(r => { const t = searchText(r); return words.every(w => t.includes(w)); })
+      : records;
+    $('count').textContent = q
+      ? shown.length + ' of ' + records.length + ' shown'
+      : (records.length ? records.length + ' record' + (records.length === 1 ? '' : 's') : '');
+
+    if (!records.length) { tb.innerHTML = messageRow('No obligation requests yet.'); renderPager(0); return; }
+    if (!shown.length)   { tb.innerHTML = messageRow('No records match your search.'); renderPager(0); return; }
+
+    const pages = Math.max(1, Math.ceil(shown.length / pageSize));
+    if (page > pages) page = pages;
+    const start = (page - 1) * pageSize;
+    const rows = shown.slice(start, start + pageSize);
+
+    rows.forEach(r => {
+      const tr = document.createElement('tr');
+
+      // ObR No. (admins also see which office owns the record)
+      const noTd = document.createElement('td');
+      noTd.textContent = r.obrNo || '';
+      if (isAdmin() && r.owner) {
+        const o = document.createElement('div');
+        o.className = 'small text-muted';
+        o.textContent = r.owner;
+        noTd.appendChild(o);
+      }
+      tr.appendChild(noTd);
+
+      [r.date, r.payee].forEach(v => {
+        const td = document.createElement('td');
+        td.textContent = v;
+        tr.appendChild(td);
+      });
+      tr.appendChild(particularsCell(r));
+
+      const amt = document.createElement('td');
+      amt.className = 'text-end';
+      amt.textContent = money(r.amount);
+
+      const editBtn = document.createElement('button');
+      editBtn.className = 'btn btn-sm btn-outline-primary me-1 write-only';
+      editBtn.textContent = 'Edit';
+      editBtn.onclick = () => openForm(r);
+
+      const printBtn = document.createElement('button');
+      printBtn.className = 'btn btn-sm btn-outline-secondary';
+      printBtn.textContent = 'Print';
+      printBtn.onclick = () => choosePrint(r);
+
+      const act = document.createElement('td');
+      act.className = 'text-end text-nowrap';
+      act.append(editBtn, printBtn);
+
+      tr.append(amt, act);
+      tb.appendChild(tr);
+    });
+
+    renderPager(shown.length, pages, start, rows.length);
+  }
+
+  /* ---------- Line items in the ObR form ---------- */
+  function addItem(it) {
+    it = it || {};
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td><input class="form-control form-control-sm i-rc" list="rcOptions" autocomplete="off"></td>' +
+      '<td><textarea class="form-control form-control-sm i-part" rows="2"></textarea></td>' +
+      '<td><input class="form-control form-control-sm i-fpp" list="fppOptions" autocomplete="off"></td>' +
+      '<td><input class="form-control form-control-sm i-acct" list="acctOptions" autocomplete="off"></td>' +
+      '<td><input type="number" step="0.01" min="0" class="form-control form-control-sm text-end i-amt" placeholder="0.00"></td>' +
+      '<td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger" title="Remove line">&times;</button></td>';
+    tr.querySelector('.i-rc').value = it.rc || '';
+    tr.querySelector('.i-part').value = it.particulars || '';
+    tr.querySelector('.i-fpp').value = it.fpp || '';
+    tr.querySelector('.i-acct').value = it.acct || '';
+    tr.querySelector('.i-amt').value = it.amount || '';
+    tr.querySelector('.i-amt').addEventListener('input', updateTotal);
+    tr.querySelector('button').onclick = () => {
+      if ($('items').rows.length > 1) tr.remove();
+      else tr.querySelectorAll('input, textarea').forEach(el => el.value = '');
+      updateTotal();
+    };
+    $('items').appendChild(tr);
+    updateTotal();
+  }
+
+  function readItems() {
+    return Array.from($('items').rows).map(tr => ({
+      rc: tr.querySelector('.i-rc').value.trim(),
+      particulars: tr.querySelector('.i-part').value.trim(),
+      fpp: tr.querySelector('.i-fpp').value.trim(),
+      acct: tr.querySelector('.i-acct').value.trim(),
+      amount: parseFloat(tr.querySelector('.i-amt').value) || 0
+    })).filter(it => it.rc || it.particulars || it.fpp || it.acct || it.amount);
+  }
+
+  function updateTotal() {
+    const total = Array.from($('items').querySelectorAll('.i-amt'))
+      .reduce((s, el) => s + (parseFloat(el.value) || 0), 0);
+    $('itemsTotal').textContent = money(total);
+  }
+
+  /* ---------- ObR form ---------- */
+ const OBR_FIELDS = ['obrNo', 'payee', 'office', 'address'];
+  let editingId = null;
+
+  function openForm(r) {
+    editingId = r ? r.id : null;
+    $('modalTitle').textContent = r
+      ? (r.obrNo ? 'Edit ObR No. ' + r.obrNo : 'Edit obligation request')
+      : 'New obligation request';
+    const v = r || {};
+    OBR_FIELDS.forEach(id => { $(id).value = v[id] || NAME_DEFAULTS[id] || ''; });
+    $('items').innerHTML = '';
+    (v.items && v.items.length ? v.items : [{}]).forEach(addItem);
+    getObrModal().show();
+  }
+
+  function readForm() {
+    const items = readItems();
+    const d = { items: items, amount: Math.round(items.reduce((s, it) => s + it.amount, 0) * 100) / 100 };
+    OBR_FIELDS.forEach(id => { d[id] = $(id).value.trim(); });
+    return d;
+  }
+
+  function saveForm(printAfter) {
+    const d = readForm();
+    const isEdit = editingId !== null;
+    if (isEdit) d.id = editingId;
+
+    showSaving();
+    call(isEdit ? 'updateObr' : 'saveObr', d)
+      .then(res => {
+        d.obrNo = res.obrNo;
+        d.id = res.id;
+        d.items = res.items;
+        d.amount = res.amount;
+        getObrModal().hide();
+
+        if (isEdit) {
+          const i = records.findIndex(x => x.id === d.id);
+          if (i > -1) records[i] = Object.assign({}, records[i], d);
+        } else {
+          d.date = res.date;
+          d.owner = res.owner;
+          records.unshift(Object.assign({ dvNo: '', dvDate: '', idNo: '', dvClass: '' }, d));
+        }
+        renderList();
+
+        if (printAfter) {
+          Swal.close();
+          printRecord(d);
+        } else {
+          Swal.fire({
+            icon: 'success',
+            title: isEdit ? 'Changes saved' : 'Saved',
+            text: res.obrNo ? 'ObR No. ' + res.obrNo : '',
+            showCancelButton: true, confirmButtonText: 'Print now', cancelButtonText: 'Close'
+          }).then(x => { if (x.isConfirmed) printRecord(d); });
+        }
+      })
+      .catch(showError('Could not save'));
+  }
+
+  /* ---------- Print choice ---------- */
+  function choosePrint(r) {
+    const icon = '<svg width="22" height="22" viewBox="0 0 16 16" fill="currentColor"><path d="M2.5 8a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1z"/><path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2H5zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H4V3zm1 5a2 2 0 0 0-2 2v1H2a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v-1a2 2 0 0 0-2-2H5zm7 2v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1z"/></svg>';
+    Swal.fire({
+      title: 'Print?',
+      html:
+        '<div class="print-sub" id="pcSub"></div>' +
+        '<div class="print-choice">' +
+          '<button type="button" class="print-opt" data-print="obr"><div class="ico">' + icon + '</div><strong>Obligation Request</strong></button>' +
+          '<button type="button" class="print-opt" data-print="dv"><div class="ico">' + icon + '</div><strong>Disbursement Voucher</strong></button>' +
+        '</div>',
+      width: 480,
+      showConfirmButton: false,
+      showCloseButton: true,
+      didOpen: popup => {
+        popup.querySelector('#pcSub').textContent = [r.obrNo ? 'ObR No. ' + r.obrNo : '', r.payee].filter(Boolean).join(' \u00B7 ');
+        popup.querySelector('[data-print="obr"]').onclick = () => { Swal.close(); printRecord(r); };
+        // Read-only accounts print the voucher as saved; they cannot edit it
+        popup.querySelector('[data-print="dv"]').onclick = () => { Swal.close(); isViewer() ? printDv(r) : openDv(r); };
+      }
+    });
+  }
+
+  /* ---------- Disbursement voucher form ---------- */
+  const DV_NAME_FIELDS = ['accName', 'treName', 'govName'];
+  let dvId = null;
+
+  const lastVal = k => { const f = records.find(x => x[k]); return f ? f[k] : ''; };
+
+  function fillInfo(boxId, r) {
+    const box = $(boxId);
+    box.innerHTML = '';
+    [['ObR No.', r.obrNo], ['Payee', r.payee], ['Amount', money(r.amount)]].forEach(([k, v]) => {
+      const row = document.createElement('div');
+      const b = document.createElement('strong');
+      b.textContent = k + ': ';
+      row.append(b, document.createTextNode(v || '-'));
+      box.appendChild(row);
+    });
+  }
+
+  function openDv(r) {
+    dvId = r.id;
+    $('dvTitle').textContent = r.dvNo ? 'Edit DV No. ' + r.dvNo : 'New disbursement voucher';
+    fillInfo('dvInfo', r);
+
+    $('dvNo').value = r.dvNo || '';
+    $('dvDate').value = r.dvDate || '';
+    $('idNo').value = r.idNo || '';
+
+    const cls = r.dvClass || 'Other Payments';
+    ['cls0', 'cls1', 'cls2'].forEach(id => { $(id).checked = ($(id).value === cls); });
+    getDvModal().show();
+  }
+
+  function saveDv(printAfter) {
+    const checked = document.querySelector('input[name="dvClass"]:checked');
+    const d = {
+      id: dvId,
+      dvNo: $('dvNo').value.trim(),
+      dvDate: $('dvDate').value,
+      idNo: $('idNo').value.trim(),
+      dvClass: checked ? checked.value : ''
+    };
+ 
+
+    showSaving();
+    call('saveDv', d)
+      .then(res => {
+        getDvModal().hide();
+        const i = records.findIndex(x => x.id === res.id);
+        if (i > -1) Object.assign(records[i], { dvNo: res.dvNo, dvDate: res.dvDate, idNo: res.idNo, dvClass: res.dvClass });
+        renderList();
+
+        const rec = records[i];
+        if (printAfter && rec) {
+          Swal.close();
+          printDv(rec);
+        } else {
+          Swal.fire({
+            icon: 'success', title: 'Voucher saved', text: res.dvNo ? 'DV No. ' + res.dvNo : '',
+            showCancelButton: true, confirmButtonText: 'Print now', cancelButtonText: 'Close'
+          }).then(x => { if (x.isConfirmed && rec) printDv(rec); });
+        }
+      })
+      .catch(showError('Could not save'));
+  }
+
+  /* ---------- Printing (ObR and DV) ---------- */
+  function blankRow(cols, height) {
+    const tr = document.createElement('tr');
+    tr.className = 'item';
+    tr.innerHTML = '<td style="height:' + height + 'px"></td>' + '<td></td>'.repeat(cols - 1);
+    return tr;
+  }
+
+  const SPACE = 16;
+
+  function printRecord(r) {
+    document.body.className = 'mode-obr';
+    setText('p_no', r.obrNo);
+    setText('p_payee', r.payee); setText('p_office', r.office); setText('p_address', r.address);
+    setText('p_total', money(r.amount));
+setText('p_reqName', NAME_DEFAULTS.reqName); setText('p_reqPos', NAME_DEFAULTS.reqPos);
+setText('p_budName', NAME_DEFAULTS.budName); setText('p_budPos', NAME_DEFAULTS.budPos);
+    const body = $('p_items');
+    body.innerHTML = '';
+    body.appendChild(blankRow(5, SPACE));
+    const items = r.items || [];
+    items.forEach((it, i) => {
+      const tr = document.createElement('tr');
+      tr.className = 'item';
+      [[it.rc, 'center pre'], [it.particulars, 'pre part'], [it.fpp, 'center pre bot'],
+       [it.acct, 'center pre bot'], [it.amount ? money(it.amount) : '', 'right bot']]
+        .forEach(([v, cls]) => {
+          const td = document.createElement('td');
+          td.className = cls;
+          td.textContent = v || '';
+          tr.appendChild(td);
+        });
+      tr.style.height = '1px';
+      body.appendChild(tr);
+
+      const next = items[i + 1];
+      if (next && (next.particulars || next.rc)) body.appendChild(blankRow(5, 8));
+    });
+
+    const fill = blankRow(5, 0);
+    body.appendChild(fill);
+
+    const area = $('printArea');
+    const saved = area.style.cssText;
+    area.style.cssText = 'display:block;position:absolute;left:-9999px;top:0;width:210mm;padding:8mm 12mm;box-sizing:border-box;';
+    const PAGE = 297 * 96 / 25.4 - 14;
+    const natural = area.offsetHeight;
+    area.style.cssText = saved;
+
+    if (natural <= PAGE) {
+      fill.firstChild.style.height = Math.max(0, PAGE - natural) + 'px';
+      area.style.zoom = '';
+    } else {
+      area.style.zoom = Math.max(0.6, PAGE / natural);
+    }
+    printWhenReady(true);
+  }
+
+  function printDv(r) {
+    document.body.className = 'mode-dv';
+    const items = r.items || [];
+    const rcs = Array.from(new Set(items.map(it => it.rc).filter(Boolean))).join(', ');
+
+    setText('d_no', r.dvNo); setText('d_date', prettyDate(r.dvDate));
+    setText('d_payee', r.payee); setText('d_idno', r.idNo); setText('d_address', r.address); setText('d_rc', rcs);
+
+    const body = $('d_items');
+    body.innerHTML = '';
+    body.appendChild(blankRow(2, SPACE));
+    items.forEach((it, i) => {
+      const tr = document.createElement('tr');
+      tr.className = 'item';
+      const p = document.createElement('td');
+      p.className = 'pre part';
+      p.textContent = it.particulars || '';
+      const a = document.createElement('td');
+      a.className = 'r bot';
+      a.textContent = it.amount ? '\u20B1 ' + money(it.amount) : '';
+      tr.append(p, a);
+      body.appendChild(tr);
+
+      const next = items[i + 1];
+      if (next && next.particulars) body.appendChild(blankRow(2, 10));
+    });
+
+    setText('d_amt2', money(r.amount));
+setText('d_posA', NAME_DEFAULTS.reqPos); setText('d_nmA', NAME_DEFAULTS.reqName);
+setText('d_nmB', NAME_DEFAULTS.accName); setText('d_nmC', NAME_DEFAULTS.treName); setText('d_nmG', NAME_DEFAULTS.govName);
+    ['Cash Advance', 'Reimbursement', 'Other Payments'].forEach((c, i) => {
+      setText('d_c' + i, (r.dvClass || 'Other Payments') === c ? '\u2713' : '');
+    });
+
+    const fill = blankRow(2, 0);
+    body.appendChild(fill);
+
+    const area = $('printDv');
+    const saved = area.style.cssText;
+    area.style.cssText = 'display:block;position:absolute;left:-9999px;top:0;width:210mm;padding:8mm 12mm;box-sizing:border-box;';
+    const PAGE = 297 * 96 / 25.4 - 14;
+    const natural = area.offsetHeight;
+    area.style.cssText = saved;
+
+    if (natural <= PAGE) {
+      fill.firstChild.style.height = Math.max(0, PAGE - natural) + 'px';
+      area.style.zoom = '';
+    } else {
+      area.style.zoom = Math.max(0.6, PAGE / natural);
+    }
+    printWhenReady(false);
+  }
+</script>

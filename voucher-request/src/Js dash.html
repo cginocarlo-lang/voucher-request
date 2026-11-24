@@ -1,0 +1,75 @@
+<script>
+  /* =====================================================================
+     DASHBOARD: budget vs. ObR per account code (all offices combined).
+     Budget: "Account Code" tab. Spending: sum of line items in the "ObR" tab.
+     ===================================================================== */
+  let budgets = null; // [{ title, code, budget }]
+  let usage = null;   // { obr: {code: amount}, obrCount }
+
+  const round2 = n => Math.round(n * 100) / 100;
+
+  function loadDash(force) {
+    $('dashBody').innerHTML = messageRow('Loading...');
+    Promise.all([call('getAccountBudgets', !!force), call('getUsage', !!force)])
+      .then(([b, u]) => {
+        budgets = b || [];
+        usage = u || { obr: {}, obrCount: 0 };
+        renderDash();
+      })
+      .catch(showError('Could not load the dashboard'));
+  }
+
+  function renderDash() {
+    if (!budgets || !usage) return;
+
+    const obrSum = usage.obr || {};
+    const listed = {};
+    const rows = budgets.map(a => {
+      listed[a.code] = true;
+      return { title: a.title, code: a.code, budget: a.budget, obr: round2(obrSum[a.code] || 0) };
+    });
+
+    // Amounts on codes that are not on the Account Code tab (or have no code)
+    let obrOther = 0;
+    Object.keys(obrSum).forEach(c => { if (!listed[c]) obrOther += obrSum[c]; });
+    obrOther = round2(obrOther);
+
+    const budget = round2(rows.reduce((s, r) => s + r.budget, 0));
+    const tObr = round2(rows.reduce((s, r) => s + r.obr, 0) + obrOther);
+
+    $('dBudget').textContent = money(budget);
+    $('dObrAmt').textContent = money(tObr);
+    $('dRemain').textContent = money(budget - tObr);
+    $('dObr').textContent = usage.obrCount;
+    
+
+    const tb = $('dashBody');
+    tb.innerHTML = '';
+    if (!rows.length) { tb.innerHTML = messageRow('No account codes found.'); return; }
+
+    const frag = document.createDocumentFragment();
+    const addRow = (code, title, bud, obr) => {
+      const pct = bud > 0 ? obr / bud * 100 : 0;
+      const color = pct >= 100 ? 'bg-danger' : pct >= 80 ? 'bg-warning' : 'bg-success';
+      const tr = document.createElement('tr');
+      [[code, ''], [title, ''], [money(bud), 'text-end'], [money(obr), 'text-end'], [money(bud - obr), 'text-end']]
+        .forEach(([v, cls]) => {
+          const td = document.createElement('td');
+          td.className = cls;
+          td.textContent = v;
+          tr.appendChild(td);
+        });
+      const td = document.createElement('td');
+      td.innerHTML =
+        '<div class="d-flex align-items-center gap-2">' +
+          '<div class="progress flex-grow-1" style="height:8px"><div class="progress-bar ' + color + '" style="width:' + Math.min(100, pct) + '%"></div></div>' +
+          '<span class="small text-nowrap">' + (bud > 0 ? pct.toFixed(1) + '%' : '-') + '</span></div>';
+      tr.appendChild(td);
+      frag.appendChild(tr);
+    };
+
+    rows.forEach(r => addRow(r.code, r.title, r.budget, r.obr));
+    if (obrOther) addRow('(Other)', 'Codes not on the Account Code', 0, obrOther);
+    tb.appendChild(frag);
+  }
+</script>

@@ -1,0 +1,31 @@
+<div class="container py-4 d-none" id="viewDash">
+  <div class="app-bar mb-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <h1 class="h4 mb-0">Dashboard</h1>
+    <button class="btn btn-primary" onclick="loadDash(true)">Refresh</button>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-md-4"><div class="card p-3"><div class="small text-muted">Total budget</div><div class="h4 mb-0" id="dBudget">-</div></div></div>
+    <div class="col-6 col-md-4"><div class="card p-3"><div class="small text-muted">Obligated (ObR)</div><div class="h4 mb-0" id="dObrAmt">-</div></div></div>
+    <div class="col-6 col-md-4"><div class="card p-3"><div class="small text-muted">Remaining</div><div class="h4 mb-0" id="dRemain">-</div></div></div>
+  </div>
+
+  <div class="card">
+    <div class="toolbar d-flex justify-content-between align-items-center gap-2">
+      <div class="small text-muted">Totals include all offices</div>
+      <div class="small text-muted">ObR records: <strong id="dObr">-</strong></div>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Account Code</th><th>Account Title</th>
+            <th class="text-end">Budget</th><th class="text-end">ObR</th>
+            <th class="text-end">Remaining</th><th style="width:20%">Utilization</th>
+          </tr>
+        </thead>
+        <tbody id="dashBody"><tr><td colspan="6" class="text-center text-muted py-4">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>

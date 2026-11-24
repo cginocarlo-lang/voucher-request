@@ -1,0 +1,84 @@
+<script>
+  /* =====================================================================
+     USERS (administrators only)
+     ===================================================================== */
+  let users = [];
+
+  function loadUsers() {
+    if (!isAdmin()) return;
+    call('listUsers').then(rows => { users = rows || []; renderUsers(); }).catch(showError('Could not load users'));
+  }
+
+  function renderUsers() {
+    const tb = $('userList');
+    tb.innerHTML = '';
+    if (!users.length) { tb.innerHTML = messageRow('No users.'); return; }
+    users.forEach(u => {
+      const tr = document.createElement('tr');
+      [u.username, u.name, u.office, u.role, u.active ? 'Active' : 'Disabled'].forEach(v => {
+        const td = document.createElement('td');
+        td.textContent = v || '';
+        tr.appendChild(td);
+      });
+      const act = document.createElement('td');
+      act.className = 'text-end text-nowrap';
+      const e = document.createElement('button');
+      e.className = 'btn btn-sm btn-outline-primary me-1';
+      e.textContent = 'Edit';
+      e.onclick = () => editUser(u);
+      const r = document.createElement('button');
+      r.className = 'btn btn-sm btn-outline-secondary';
+      r.textContent = 'Reset password';
+      r.onclick = () => resetPw(u);
+      act.append(e, r);
+      tr.appendChild(act);
+      tb.appendChild(tr);
+    });
+  }
+
+  function editUser(u) {
+    const isNew = !u;
+    u = u || { role: 'office', active: true };
+    Swal.fire({
+      title: isNew ? 'Add user' : 'Edit ' + u.username,
+      html:
+        '<input id="uName" class="swal2-input" placeholder="Username"' + (isNew ? '' : ' disabled') + '>' +
+        '<input id="uFull" class="swal2-input" placeholder="Full name">' +
+        '<input id="uOffice" class="swal2-input" placeholder="Office code (e.g. PHO)">' +
+        '<select id="uRole" class="swal2-select"><option value="office">Office (can edit)</option><option value="viewer">Viewer (read only)</option><option value="admin">Admin</option></select>' +
+        (isNew
+          ? '<input id="uPw" type="password" class="swal2-input" placeholder="Temporary password (4+ characters)" autocomplete="new-password">'
+          : '<label class="d-block mt-2"><input type="checkbox" id="uActive"> Active</label>'),
+      didOpen: () => {
+        $('uName').value = u.username || '';
+        $('uFull').value = u.name || '';
+        $('uOffice').value = u.office || '';
+        $('uRole').value = u.role;
+        if (!isNew) $('uActive').checked = u.active;
+      },
+      showCancelButton: true,
+      confirmButtonText: 'Save',
+      preConfirm: () => call('saveUser', {
+        username: $('uName').value,
+        name: $('uFull').value,
+        office: $('uOffice').value,
+        role: $('uRole').value,
+        password: isNew ? $('uPw').value : '',
+        active: isNew ? true : $('uActive').checked
+      }).catch(e => { Swal.showValidationMessage(String(e.message || e).replace(/^Error:\s*/, '')); return false; })
+    }).then(x => { if (x.isConfirmed) loadUsers(); });
+  }
+
+  function resetPw(u) {
+    Swal.fire({
+      title: 'Reset password for ' + u.username,
+      input: 'password',
+      inputPlaceholder: 'Temporary password (4+ characters)',
+      showCancelButton: true,
+      preConfirm: pw => call('resetPassword', u.username, pw)
+        .catch(e => { Swal.showValidationMessage(String(e.message || e).replace(/^Error:\s*/, '')); return false; })
+    }).then(x => {
+      if (x.isConfirmed) Swal.fire('Done', 'The user must set a new password at next sign-in.', 'success');
+    });
+  }
+</script>

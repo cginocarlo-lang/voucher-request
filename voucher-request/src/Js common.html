@@ -1,0 +1,113 @@
+<script>
+  /* =====================================================================
+     COMMON: helpers shared by every module
+     ===================================================================== */
+  const $ = id => document.getElementById(id);
+  const money = n => (Number(n) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const setText = (id, v) => { $(id).textContent = v || ''; };
+  const modalOf = id => bootstrap.Modal.getOrCreateInstance($(id));
+  const showError = title => e => Swal.fire(title, String((e && e.message) || e).replace(/^Error:\s*/, ''), 'error');
+  const showSaving = () => Swal.fire({ title: 'Saving...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+  const messageRow = text => '<tr><td colspan="6" class="text-center text-muted py-4">' + text + '</td></tr>';
+
+  const prettyDate = s => {
+    if (!s) return '';
+    const d = new Date(s + 'T00:00:00');
+    return isNaN(d) ? s : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  /* ---------- Sidebar views ---------- */
+  const VIEWS = ['dash', 'obr', 'users'];
+  const cap = k => k.charAt(0).toUpperCase() + k.slice(1);
+
+  function showView(v) {
+    VIEWS.forEach(k => {
+      const view = $('view' + cap(k));
+      if (view) view.classList.toggle('d-none', v !== k);
+      const nav = $('nav' + cap(k));
+      if (nav) nav.classList.toggle('active', v === k);
+    });
+    if (v === 'dash') loadDash();
+    if (v === 'users') loadUsers();
+  }
+
+  /* ---------- Dropdown suggestions (account codes, responsibility centers, F.P.P) ---------- */
+  function loadLookups() {
+    call('getLookups').then(all => {
+      Object.keys(all || {}).forEach(id => {
+        const dl = $(id);
+        if (!dl) return;
+        const frag = document.createDocumentFragment();
+        (all[id] || []).forEach(r => {
+          const o = document.createElement('option');
+          o.value = r.code;
+          if (r.title) o.label = r.title;
+          frag.appendChild(o);
+        });
+        dl.innerHTML = '';
+        dl.appendChild(frag);
+      });
+    }).catch(err => console.error('getLookups failed:', err));
+  }
+
+  /* ---------- Debounce ---------- */
+  const debounce = (fn, ms) => {
+    let t;
+    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms || 200); };
+  };
+
+  /* ---------- Particulars cell with "See more" ---------- */
+  const PART_LIMIT = 40;
+  const summary = r => (r.items || []).map(it => it.particulars).filter(Boolean).join('; ');
+
+  function particularsCell(r) {
+    const text = summary(r);
+    const td = document.createElement('td');
+    td.style.maxWidth = '300px';
+    td.style.whiteSpace = 'pre-line';
+    td.style.overflowWrap = 'anywhere';
+
+    if (text.length <= PART_LIMIT) { td.textContent = text; return td; }
+
+    const span = document.createElement('span');
+    span.textContent = text.slice(0, PART_LIMIT).trimEnd() + '\u2026';
+    const link = document.createElement('a');
+    link.href = '#';
+    link.className = 'see-more ms-1';
+    link.textContent = 'See more';
+    link.onclick = e => { e.preventDefault(); showParticulars(r); };
+    td.append(span, link);
+    return td;
+  }
+
+  function showParticulars(r) {
+    $('partTitle').textContent = r.obrNo ? 'Particulars - ObR No. ' + r.obrNo : 'Particulars';
+    $('partPayee').textContent = r.payee || '';
+    const body = $('partBody');
+    body.innerHTML = '';
+    (r.items || []).filter(it => it.particulars || it.amount).forEach(it => {
+      const row = document.createElement('div');
+      row.className = 'part-item d-flex justify-content-between gap-3';
+      const t = document.createElement('div');
+      t.className = 'part-text';
+      t.textContent = it.particulars || '';
+      const a = document.createElement('div');
+      a.className = 'text-nowrap fw-semibold';
+      a.textContent = it.amount ? money(it.amount) : '';
+      row.append(t, a);
+      body.appendChild(row);
+    });
+    $('partTotal').textContent = money(r.amount);
+    modalOf('partModal').show();
+  }
+
+  /* ---------- Print: waits for the logo (up to 3 seconds) ---------- */
+  function printWhenReady(withLogo) {
+    const logo = $('p_logo');
+    let printed = false;
+    const go = () => { if (!printed) { printed = true; setTimeout(() => window.print(), 300); } };
+    if (!withLogo || !logo || logo.complete) go();
+    else { logo.addEventListener('load', go); logo.addEventListener('error', go); setTimeout(go, 3000); }
+  }
+</script>

@@ -1,0 +1,269 @@
+<style>
+  /* =====================================================================
+     OBR MODULE: Obligation Request + Disbursement Voucher (print layouts)
+     ===================================================================== */
+  #printArea, #printDv { display: none; }
+
+  .print-sub { color: #6b7f72; font-size: 16px; margin-bottom: 16px; }
+  .print-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .print-opt { border: 1px solid var(--g-200); background: var(--g-50); border-radius: 14px; padding: 20px 12px; text-align: center; cursor: pointer; transition: all .15s; font-family: inherit; color: #24352a; }
+  .print-opt:hover, .print-opt:focus-visible { border-color: var(--g-500); background: var(--g-100); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(61,154,90,.18); outline: none; }
+  .print-opt .ico { width: 44px; height: 44px; margin: 0 auto 10px; border-radius: 12px; background: var(--g-600); color: #fff; display: flex; align-items: center; justify-content: center; }
+  .print-opt strong { display: block; font-size: 15px; color: var(--g-900); }
+  .print-opt small { display: block; margin-top: 4px; font-size: 12px; color: #6b7f72; }
+  @media (max-width: 480px) { .print-choice { grid-template-columns: 1fr; } }
+
+  /* ---------- Printable ObR form ---------- */
+  .obr .item td.part { text-indent: 28px; }
+  .obr { width: 100%; max-width: 780px; margin: 0 auto; border-collapse: collapse; table-layout: fixed; font-size: 12px; color: #000; background: #fff; }
+  .obr td, .obr th { border: 1px solid #000; padding: 3px 6px; vertical-align: top; overflow-wrap: anywhere; word-break: break-word; }
+  .obr .head { text-align: center; border: 1px solid #000; padding: 6px; font-size: 14px; }
+  .obr .head strong { font-size: 17px; }
+  .obr .head-wrap { position: relative; min-height: 64px; display: flex; align-items: center; justify-content: center; }
+  .obr .split-seal { position: absolute; left: 70px; top: 50%; transform: translateY(-50%); height: 64px; width: 64px; object-fit: contain; }
+  .obr .center { text-align: center; }
+  .obr .right { text-align: right; }
+  .obr .lbl { width: 90px; }
+  .obr .item td { border-top: 0; border-bottom: 0; }
+  .obr .pre { white-space: pre-wrap; }
+  .obr .obr-title { text-align: center; vertical-align: middle; font-size: 22px; font-weight: bold; height: 48px; letter-spacing: .5px; }
+  .obr .obr-no { vertical-align: middle; font-size: 12px; }
+  .obr .item td.bot { vertical-align: bottom; }
+  #p_payee { font-weight: bold; }
+
+  /* Certification / signature block */
+  .obr.cert { margin-top: -1px; }
+  .obr .cb { padding: 0; }
+  .cert .top { height: 150px; }
+  .cert .hd { display: flex; align-items: stretch; height: 24px; font-size: 13px; }
+  .cert .hd .let { width: 26px; border-right: 1px solid #000; border-bottom: 1px solid #000; display: flex; align-items: center; justify-content: center; margin-right: 10px; }
+  .cert .hd strong { display: flex; align-items: center; }
+  .cert .chk { display: flex; align-items: flex-start; gap: 12px; margin: 16px 0 0 10%; }
+  .cert .sq { flex: none; width: 22px; height: 22px; border: 1px solid #000; }
+  .cert .txt { line-height: 16px; padding-top: 3px; }
+  .cert .ex { margin: 16px 6px 0; line-height: 16px; padding-top: 3px; }
+  .cert .lb { white-space: nowrap; }
+  .cert .r-sig td, .cert .r-date td { height: 26px; }
+  .cert .r-name td { height: 40px; }
+  .cert .nm { text-align: left; vertical-align: bottom; font-weight: bold; }
+  .cert .r-title td { height: 18px; padding-top: 1px; padding-bottom: 1px; }
+  .cert .sm { font-size: 9px; vertical-align: middle; }
+
+  /* ---------- Printable Disbursement Voucher ---------- */
+  .dv .item td.part { text-indent: 28px; }
+  .dv { width: 100%; max-width: 780px; margin: 0 auto; border-collapse: collapse; font-size: 12px; color: #000; background: #fff; table-layout: fixed; }
+  .dv + .dv { margin-top: -1px; }
+  .dv td { border: 1px solid #000; padding: 4px 6px; vertical-align: top; }
+  .dv .c { text-align: center; }
+  .dv .r { text-align: right; }
+
+  .dv .ttl { font-family: Arial, sans-serif; font-weight: 800; font-size: 28px; letter-spacing: .5px; text-align: center; padding-top: 10px; }
+  .dv .agency { font-family: "Times New Roman", serif; font-weight: bold; font-size: 18px; text-decoration: underline; text-align: center; padding-top: 14px; }
+  .dv .lgu { font-style: italic; text-align: center; font-size: 11px; }
+  .dv-annex { width: 100%; max-width: 780px; margin: 0 auto; display: flex; font-size: 12px; font-weight: bold; color: #000; }
+  .dv-annex span { width: 28%; margin-left: auto; text-align: center; padding-bottom: 3px; }
+
+  .dv .cls-h { font-weight: 800; font-style: italic; font-size: 16px; text-align: center; border-bottom: 0; padding-top: 8px; }
+  .dv .cls-row { border-top: 0; height: 52px; }
+  .dv .cls-wrap { display: flex; justify-content: space-around; align-items: center; height: 100%; }
+  .dv .cls-it { display: flex; align-items: center; gap: 14px; font-size: 12px; }
+  .dv .cbx { width: 30px; height: 26px; border: 1px solid #000; display: inline-flex; align-items: center; justify-content: center; font-size: 17px; font-weight: bold; }
+
+  .dv .field { height: 52px; }
+  .dv .field .val { display: block; word-break: break-word; text-indent: 28px; }
+  .dv .val { font-weight: bold; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .dv .ph { font-weight: 800; letter-spacing: 3px; text-align: center; font-size: 13px; padding: 5px; }
+  .dv .item td { border-top: 0; border-bottom: 0; }
+  .dv .pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .dv .due td { height: 46px; vertical-align: middle; }
+  .dv .arrow { font-size: 26px; color: #4472c4; vertical-align: middle; margin: 0 16px 0 14px; }
+  .dv .item td.bot { vertical-align: bottom; }
+
+  .dv .nm { font-weight: bold; text-align: center; }
+  .dv .bx { padding: 0; position: relative; }
+  .dv .bx .hd { display: flex; align-items: stretch; height: 22px; font-size: 12px; }
+  .dv .bx .let { width: 22px; border-right: 1px solid #000; border-bottom: 1px solid #000; display: flex; align-items: center; justify-content: center; margin-right: 6px; font-weight: bold; }
+  .dv .bx .hd span.t { display: flex; align-items: center; }
+  .dv .bx .txt { font-size: 10px; padding: 8px 12px 0 18px; line-height: 1.4; }
+  .dv .bx.t1 { height: 120px; border-bottom: 0; }
+
+  .dv .pos { height: 26px; vertical-align: bottom; text-align: center; border-top: 0; border-bottom: 0; font-size: 12px; }
+  .dv .sgn { text-align: center; font-style: italic; font-size: 12px; height: 26px; vertical-align: middle; }
+
+  .dv .gov { position: absolute; left: 0; right: 0; bottom: 3px; text-align: center; font-size: 12px; }
+  .dv .sig2 { height: 70px; vertical-align: top; padding-top: 2px; }
+  .dv .sig2 .jev { text-align: left; font-style: normal; margin-top: 22px; }
+  .dv .jev { font-weight: bold; padding-top: 6px; }
+
+  .dv .pay { padding: 9.5px 8px 0 6px; font-size: 12px; }
+  .dv .pay .wrap { display: flex; align-items: center; }
+  .dv .pay .arrow { flex: none; margin: 0 6px 0 0; font-size: 22px; }
+  .dv .pay .ln { display: flex; gap: 4px; margin: 6px 0 0 0; align-items: flex-end; }
+  .dv .pay .ln i { flex: 1; border-bottom: 1px solid #000; min-height: 14px; }
+
+  @media print {
+    body.mode-obr #printArea { display: block; width: 100%; padding: 8mm 12mm; box-sizing: border-box; }
+    body.mode-obr #printArea .obr { break-inside: avoid; page-break-inside: avoid; }
+    body.mode-obr #printArea .obr tr { break-inside: avoid; page-break-inside: avoid; }
+    .cert .top { height: 120px; }
+    body.mode-dv #printDv { display: block; width: 100%; padding: 8mm 12mm; box-sizing: border-box; }
+  }
+</style>
+
+<div id="printArea">
+  <table class="obr">
+    <colgroup><col style="width:11%"><col style="width:54%"><col style="width:7%"><col style="width:13%"><col style="width:15%"></colgroup>
+    <tr><td colspan="5" class="head">
+      <div class="head-wrap">
+        <img id="p_logo" class="split-seal" src="https://lh3.googleusercontent.com/u/0/d/106xJa9wP8qu72xcSWOrpkewrrjivhNXk" alt="PGO" referrerpolicy="no-referrer">
+        <div>Republic of the Philippines<br><strong>Provincial Government of Aklan</strong><br>Kalibo, Aklan</div>
+      </div>
+    </td></tr>
+    <tr>
+      <th colspan="3" class="obr-title">OBLIGATION REQUEST</th>
+      <td colspan="2" class="obr-no">No. <span id="p_no"></span></td>
+    </tr>
+    <tr><td class="lbl">Payee</td><td colspan="4" id="p_payee"></td></tr>
+    <tr><td class="lbl">Office</td><td colspan="4" id="p_office"></td></tr>
+    <tr><td class="lbl">Address</td><td colspan="4" id="p_address"></td></tr>
+    <tr class="center">
+      <th style="width:11%; font-size: 10px; vertical-align: middle;">Responsibility Center</th>
+      <th style="vertical-align: middle;">Particular</th>
+      <th style="width:7%; vertical-align: middle;">F.P.P</th>
+      <th style="width:13%; vertical-align: middle;">Account Code</th>
+      <th style="width:15%; vertical-align: middle;">Amount</th>
+    </tr>
+    <tbody id="p_items"></tbody>
+    <tr>
+      <td colspan="4" class="right"><strong>Total</strong></td>
+      <td class="right"><strong id="p_total"></strong></td>
+    </tr>
+  </table>
+
+  <table class="obr cert">
+    <colgroup><col style="width:9.8%"><col style="width:48.2%"><col style="width:10%"><col style="width:33.8%"></colgroup>
+    <tr>
+      <td colspan="2" class="cb top">
+        <div class="hd"><span class="let">A</span><strong>Certified</strong></div>
+        <div class="chk"><span class="sq"></span><span class="txt">Charges to appropriation necessary,<br>&nbsp;lawful and under my direct supervision</span></div>
+        <div class="chk"><span class="sq"></span><span class="txt">Supporting documents valid, proper and legal</span></div>
+      </td>
+      <td colspan="2" class="cb top">
+        <div class="hd"><span class="let">B</span><strong>Certified</strong></div>
+        <div class="ex">Existence of available appropriation</div>
+      </td>
+    </tr>
+    <tr class="r-sig">
+      <td class="lb">Signature:</td><td></td>
+      <td class="lb">Signature:</td><td></td>
+    </tr>
+    <tr class="r-name">
+      <td class="lb">Printed<br>Name</td><td class="nm" id="p_reqName"></td>
+      <td class="lb">Printed<br>Name</td><td class="nm" id="p_budName"></td>
+    </tr>
+    <tr class="r-title">
+      <td class="lb sm" rowspan="2">Position:</td><td id="p_reqPos"></td>
+      <td class="lb sm" rowspan="2">Position:</td><td id="p_budPos"></td>
+    </tr>
+    <tr class="r-pos">
+      <td class="sm">Head, Requesting Office/Authorized Representative</td>
+      <td class="sm">Head, Budget Unit/Authorized Representative</td>
+    </tr>
+    <tr class="r-date">
+      <td class="lb">Date</td><td></td>
+      <td class="lb">Date</td><td></td>
+    </tr>
+  </table>
+</div>
+
+<div id="printDv">
+  <div class="dv-annex"><span>Annex 24</span></div>
+  <table class="dv">
+    <colgroup><col style="width:72%"><col style="width:28%"></colgroup>
+    <tr>
+      <td rowspan="2" style="padding:0">
+        <div class="ttl">DISBURSEMENT VOUCHER</div>
+        <div class="agency">PROVINCIAL GOVERNMENT OF AKLAN</div>
+        <div class="lgu">LGU</div>
+      </td>
+      <td style="height:38px"><strong>DV No.:</strong> <span class="val" id="d_no"></span></td>
+    </tr>
+    <tr><td style="height:60px"><strong>Date:</strong> <span class="val" id="d_date"></span></td></tr>
+  </table>
+  <table class="dv">
+    <colgroup><col style="width:72%"><col style="width:28%"></colgroup>
+    <tr><td colspan="2" class="cls-h">CLASSIFICATION OF DISBURSEMENT</td></tr>
+    <tr><td colspan="2" class="cls-row">
+      <div class="cls-wrap">
+        <div class="cls-it"><span class="cbx" id="d_c0"></span>Cash Advance</div>
+        <div class="cls-it"><span class="cbx" id="d_c1"></span>Reimbursement</div>
+        <div class="cls-it"><span class="cbx" id="d_c2"></span>Other Payments</div>
+      </div>
+    </td></tr>
+    <tr><td class="field">Name of Claimant: <span class="val" id="d_payee"></span></td><td class="field">ID No./TIN: <span class="val" id="d_idno"></span></td></tr>
+    <tr><td class="field">Address: <span class="val" id="d_address"></span></td><td class="field">Responsibility Center: <span class="val" id="d_rc"></span></td></tr>
+    <tr><td class="ph">Particulars</td><td class="ph" style="letter-spacing:0">Amount</td></tr>
+    <tbody id="d_items"></tbody>
+    <tr class="due">
+      <td class="r"><span style="font-family:'Times New Roman',serif">Amount Due</span><span class="arrow">&#10148;</span></td>
+      <td class="r"><strong>&#8369; <span id="d_amt2"></span></strong></td>
+    </tr>
+  </table>
+  <table class="dv">
+    <colgroup><col style="width:33%"><col style="width:33%"><col style="width:34%"></colgroup>
+    <tr>
+      <td class="bx t1" style="height:100px">
+        <div class="hd"><span class="let">A</span><span class="t"><strong>Certified:</strong></span></div>
+        <div class="txt">Expenses/Cash Advances necessary, lawful and incurred under my direct supervision</div>
+      </td>
+      <td class="bx t1" style="height:100px">
+        <div class="hd"><span class="let">B</span></div>
+        <div class="txt" style="font-size:10px;margin-top:-14px;padding-left:36px">Completeness and propriety of supporting documents/previous cash advance liquidated/existence of funds held in trust:</div>
+      </td>
+      <td class="bx t1" style="height:100px">
+        <div class="hd"><span class="let">C</span><span class="t"><strong>Cash available:</strong></span></div>
+      </td>
+    </tr>
+    <tr>
+      <td class="pos"><div class="nm" id="d_nmA"></div><div id="d_posA"></div></td>
+      <td class="pos"><div class="nm" id="d_nmB"></div><div>Provincial Accountant</div></td>
+      <td class="pos"><div class="nm" id="d_nmC"></div><div>Provincial Treasurer</div></td>
+    </tr>
+    <tr><td class="sgn">Signature Over Printed Name/Position</td><td class="sgn">Signature Over Printed Name/Position</td><td class="sgn">Signature Over Printed Name/Position</td></tr>
+  </table>
+  <table class="dv">
+    <colgroup><col style="width:33%"><col style="width:33%"><col style="width:34%"></colgroup>
+    <tr>
+      <td class="bx" style="height:100px">
+        <div class="hd">
+          <span class="let">D</span>
+          <span class="t" style="flex:1;white-space:nowrap">
+            <strong>Approved</strong>&nbsp;For Payment:&nbsp;&#8369;&nbsp;<span id="d_appr" style="flex:1;height:14px;border-bottom:1px solid #000;margin-right:8px;align-self:flex-end;margin-bottom:4px"></span>
+          </span>
+        </div>
+        <div class="gov"><strong id="d_nmG"></strong><div>Provincial Governor</div></div>
+      </td>
+      <td rowspan="2" class="pay">
+        <div style="margin-bottom:1px">Payment:</div>
+        <div class="wrap">
+          <span class="arrow">&#10148;</span>
+          <div style="flex:1">
+            <div class="ln"><span>Check No.</span><i></i></div>
+            <div class="ln"><span>Bank Name:</span><i></i></div>
+            <div class="ln"><span>Date:</span><i></i></div>
+          </div>
+        </div>
+      </td>
+      <td class="bx" style="height:100px">
+        <div class="hd"><span class="let">E</span><span class="t"><strong>Received Payment:</strong></span></div>
+      </td>
+    </tr>
+    <tr>
+      <td class="sgn sig2">Signature Over Printed Name/Position</td>
+      <td class="sgn sig2">
+        Signature Over Printed Name/Position
+        <div class="jev">JEV No.________________Date____________</div>
+      </td>
+    </tr>
+  </table>
+</div>
